@@ -1,0 +1,30 @@
+appsettings.json
+.vscode
+
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.exe
+*.pdb
+
+## Database
+*.db
+*.db-shm
+*.db-wal
+
+## Visual Studio
+.vs/
+*.vsidx
+*.vspscc
+
+## Rider
+.idea/
+
+## User-specific files
+appsettings.Development.json
+appsettings.Local.json
+
