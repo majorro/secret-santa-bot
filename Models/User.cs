@@ -17,7 +17,7 @@ public class User
     
     public string? Wishes { get; set; }
     
-    public string? PostOfficeLink { get; set; }
+    public string? Addresses { get; set; }
     
     public string? PhoneNumber { get; set; }
     

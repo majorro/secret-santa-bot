@@ -30,7 +30,9 @@ public class ShuffleService
         // Check if shuffle already happened
         if (await HasShuffleHappenedAsync())
         {
-            return (false, "Жеребьёвка уже была проведена.");
+            _context.RemoveRange(await _context.Shuffle.ToArrayAsync());
+            await _context.SaveChangesAsync();
+            // return (false, "Жеребьёвка уже была проведена.");
         }
         
         // Get all blacklists

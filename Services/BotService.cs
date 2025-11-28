@@ -85,14 +85,17 @@ public class BotService : IHostedService
             {
                 switch (command)
                 {
-                    case "/start":
-                        await HandleStartCommand(chatId, cancellationToken);
+                    case "/start" or "/help":
+                        await HandleStartCommand(chatId, userId, cancellationToken);
                         break;
                     case "/register":
                         await HandleRegisterCommand(chatId, userId, username, firstName, lastName, cancellationToken);
                         break;
                     case "/myinfo":
                         await HandleMyInfoCommand(chatId, userId, cancellationToken);
+                        break;
+                    case "/recipientinfo":
+                        await HandleRecipientInfoCommand(chatId, userId, cancellationToken);
                         break;
                     case "/updatewishes":
                         await HandleUpdateWishesCommand(chatId, userId, args, cancellationToken);
@@ -152,28 +155,33 @@ public class BotService : IHostedService
             }
         }
     }
-    
-    private async Task HandleStartCommand(long chatId, CancellationToken cancellationToken)
+
+    private async Task HandleStartCommand(long chatId, long userId, CancellationToken cancellationToken)
     {
         var message = "🎄 Добро пожаловать в бота Тайного Санты!\n\n" +
-                     "Доступные команды:\n" +
-                     "/register - Зарегистрироваться\n" +
-                     "/myinfo - Посмотреть свою информацию\n" +
-                     "/updatewishes <текст> - Обновить пожелания\n" +
-                     "/update_destination <текст> - Обновить адрес доставки\n" +
-                     "/updatephone <номер> - Обновить номер телефона\n" +
-                     "/blacklist add @username - Добавить пользователя в чёрный список\n" +
-                     "/blacklist remove @username - Удалить пользователя из чёрного списка\n" +
-                     "/blacklist list - Показать чёрный список\n" +
-                     "/message sender <текст> - Отправить анонимное сообщение тому, кто вам дарит\n" +
-                     "/message recipient <текст> - Отправить анонимное сообщение тому, кому вы дарите\n\n" +
-                     "Команды администратора:\n" +
-                     "/adduser @username - Добавить участника\n" +
-                     "/shuffle - Провести жеребьёвку\n" +
-                     "/sendinfo - Отправить информацию получателям\n" +
-                     "/participants - Список участников\n" +
-                     "/stats - Статистика";
-        
+                      "Доступные команды:\n" +
+                      "/help - Показать это сообщение\n" +
+                      "/register - Зарегистрироваться\n" +
+                      "/myinfo - Посмотреть свою информацию\n" +
+                      "/recipientinfo - Посмотреть информацию о том, кому вы дарите" +
+                      "/updatewishes <текст> - Обновить пожелания\n" +
+                      "/update_destination <текст> - Обновить адрес доставки\n" +
+                      "/updatephone <номер> - Обновить номер телефона\n" +
+                      "/blacklist add @username - Добавить пользователя в чёрный список\n" +
+                      "/blacklist remove @username - Удалить пользователя из чёрного списка\n" +
+                      "/blacklist list - Показать чёрный список\n" +
+                      "/message sender <текст> - Отправить анонимное сообщение тому, кто вам дарит\n" +
+                      "/message recipient <текст> - Отправить анонимное сообщение тому, кому вы дарите\n";
+        if (IsAdmin(userId))
+        {
+            message += "\nКоманды администратора:\n" +
+                       "/adduser @username - Добавить участника\n" +
+                       "/shuffle - Провести жеребьёвку\n" +
+                       "/sendinfo - Отправить информацию получателям\n" +
+                       "/participants - Список участников\n" +
+                       "/stats - Статистика";
+        }
+
         await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
     }
     
@@ -226,7 +234,7 @@ public class BotService : IHostedService
         var message = "📋 Ваша информация:\n\n" +
                      $"Пользователь: {GetUserDisplayName(user)}\n" +
                      $"Пожелания: {(string.IsNullOrEmpty(user.Wishes) ? "не указаны" : user.Wishes)}\n" +
-                     $"Адрес доставки: {(string.IsNullOrEmpty(user.PostOfficeLink) ? "не указан" : user.PostOfficeLink)}\n" +
+                     $"Адрес доставки: {(string.IsNullOrEmpty(user.Addresses) ? "не указан" : user.Addresses)}\n" +
                      $"Телефон: {(string.IsNullOrEmpty(user.PhoneNumber) ? "не указан" : user.PhoneNumber)}\n\n";
         
         var blacklist = await _context.Blacklist
@@ -247,6 +255,33 @@ public class BotService : IHostedService
             message += "Чёрный список пуст.";
         }
         
+        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+    }
+
+    private async Task HandleRecipientInfoCommand(long chatId, long userId, CancellationToken cancellationToken)
+    {
+        if (!await _shuffleService.HasShuffleHappenedAsync())
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Информация о получателе недоступна до жеребьёвки.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var assignment = await _shuffleService.GetGifterAssignmentAsync(userId);
+
+        if (assignment is null)
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Не найдена информация о вашем назначении.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var message = GetRecipientInfoString(assignment);
         await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
     }
     
@@ -298,7 +333,7 @@ public class BotService : IHostedService
             return;
         }
         
-        user.PostOfficeLink = args;
+        user.Addresses = args;
         await _context.SaveChangesAsync(cancellationToken);
         
         await _botClient.SendTextMessageAsync(chatId, "✅ Адрес доставки обновлён!", cancellationToken: cancellationToken);
@@ -486,8 +521,8 @@ public class BotService : IHostedService
         
         // Send to recipient
         var label = isFromGifter 
-            ? "💬 Сообщение от того, кто вам дарит:" 
-            : "💬 Сообщение от того, кому вы дарите:";
+            ? "💬 Сообщение от того, кто вам дарит (sender):"
+            : "💬 Сообщение от того, кому вы дарите (recipient):";
         
         await _botClient.SendTextMessageAsync(targetUser.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
         await _botClient.SendTextMessageAsync(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
@@ -520,15 +555,9 @@ public class BotService : IHostedService
     
     private async Task HandleShuffleCommand(long chatId, CancellationToken cancellationToken)
     {
-        var (success, message) = await _shuffleService.PerformShuffleAsync();
+        var (_, message) = await _shuffleService.PerformShuffleAsync();
         
         await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
-        
-        if (success)
-        {
-            // Send info to all gifters
-            await HandleSendInfoCommand(chatId, cancellationToken);
-        }
     }
     
     private async Task HandleSendInfoCommand(long chatId, CancellationToken cancellationToken)
@@ -550,11 +579,7 @@ public class BotService : IHostedService
         {
             try
             {
-                var message = "🎁 Информация о вашем получателе:\n\n" +
-                             $"Получатель: {GetUserDisplayName(assignment.Recipient)}\n" +
-                             $"Пожелания: {(string.IsNullOrEmpty(assignment.Recipient.Wishes) ? "не указаны" : assignment.Recipient.Wishes)}\n" +
-                             $"Адрес доставки: {(string.IsNullOrEmpty(assignment.Recipient.PostOfficeLink) ? "не указан" : assignment.Recipient.PostOfficeLink)}\n" +
-                             $"Телефон: {(string.IsNullOrEmpty(assignment.Recipient.PhoneNumber) ? "не указан" : assignment.Recipient.PhoneNumber)}";
+                var message = GetRecipientInfoString(assignment);
                 
                 await _botClient.SendTextMessageAsync(assignment.GifterId, message, cancellationToken: cancellationToken);
                 sentCount++;
@@ -570,6 +595,13 @@ public class BotService : IHostedService
             $"Информация отправлена:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}", 
             cancellationToken: cancellationToken);
     }
+
+    private string GetRecipientInfoString(Shuffle assignment) =>
+        "🎁 Информация о вашем получателе:\n\n" +
+        $"Получатель: {GetUserDisplayName(assignment.Recipient)}\n" +
+        $"Пожелания: {(string.IsNullOrEmpty(assignment.Recipient.Wishes) ? "не указаны" : assignment.Recipient.Wishes)}\n" +
+        $"Адрес доставки: {(string.IsNullOrEmpty(assignment.Recipient.Addresses) ? "не указан" : assignment.Recipient.Addresses)}\n" +
+        $"Телефон: {(string.IsNullOrEmpty(assignment.Recipient.PhoneNumber) ? "не указан" : assignment.Recipient.PhoneNumber)}";
     
     private async Task HandleParticipantsCommand(long chatId, CancellationToken cancellationToken)
     {
