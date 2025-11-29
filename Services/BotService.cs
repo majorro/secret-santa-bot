@@ -42,7 +42,21 @@ public class BotService : IHostedService
         {
             AllowedUpdates = Array.Empty<UpdateType>()
         };
-        
+
+        await _botClient.SetMyCommandsAsync(
+            [
+                new BotCommand { Command = "help", Description = "Показать список доступных команд" },
+                new BotCommand { Command = "register", Description = "Зарегистрироваться" },
+                new BotCommand { Command = "myinfo", Description = "Посмотреть свою информацию" },
+                new BotCommand { Command = "recipientinfo", Description = "Посмотреть информацию получателя" },
+                new BotCommand { Command = "updatewishes", Description = "Обновить пожелания" },
+                new BotCommand { Command = "update_destination", Description = "Обновить адрес доставки" },
+                new BotCommand { Command = "updatephone", Description = "Обновить номер телефона" },
+                new BotCommand { Command = "blacklist", Description = "Управление чёрным списком" },
+                new BotCommand { Command = "message", Description = "Отправить анонимное сообщение" }
+            ],
+            new BotCommandScopeAllPrivateChats());
+
         _botClient.StartReceiving(
             updateHandler: HandleUpdateAsync,
             pollingErrorHandler: HandlePollingErrorAsync,
@@ -165,7 +179,7 @@ public class BotService : IHostedService
                       "/myinfo - Посмотреть свою информацию\n" +
                       "/recipientinfo - Посмотреть информацию о том, кому вы дарите" +
                       "/updatewishes <текст> - Обновить пожелания\n" +
-                      "/update_destination <текст> - Обновить адрес доставки\n" +
+                      "/update_destination <текст> - Обновить адреса доставки\n" +
                       "/updatephone <номер> - Обновить номер телефона\n" +
                       "/blacklist add @username - Добавить пользователя в чёрный список\n" +
                       "/blacklist remove @username - Удалить пользователя из чёрного списка\n" +
