@@ -78,8 +78,17 @@ public class BotService : IHostedService
     {
         if (update.Message is not { } message)
             return;
-        
-        if (message.Text is not { } messageText)
+
+        string? messageText;
+        if (message.Text is not null)
+        {
+            messageText = message.Text;
+        }
+        else if (message.Caption is not null)
+        {
+            messageText = message.Caption;
+        }
+        else
             return;
         
         var chatId = message.Chat.Id;
@@ -124,7 +133,7 @@ public class BotService : IHostedService
                         await HandleBlacklistCommand(chatId, userId, args, cancellationToken);
                         break;
                     case "/message":
-                        await HandleMessageCommand(chatId, userId, args, cancellationToken);
+                        await HandleMessageCommand(chatId, userId, args, message, cancellationToken);
                         break;
                     // Admin commands
                     case "/adduser":
@@ -142,6 +151,12 @@ public class BotService : IHostedService
                     case "/sendinfo":
                         if (IsAdmin(userId))
                             await HandleSendInfoCommand(chatId, cancellationToken);
+                        else
+                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        break;
+                    case "/messageall":
+                        if (IsAdmin(userId))
+                            await HandleMessageAllCommand(chatId, args, cancellationToken);
                         else
                             await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
@@ -192,6 +207,7 @@ public class BotService : IHostedService
                        "/adduser @username - Добавить участника\n" +
                        "/shuffle - Провести жеребьёвку\n" +
                        "/sendinfo - Отправить информацию получателям\n" +
+                       "/messageall - Написать всем участникам\n" +
                        "/participants - Список участников\n" +
                        "/stats - Статистика";
         }
@@ -493,54 +509,98 @@ public class BotService : IHostedService
             await _botClient.SendTextMessageAsync(chatId, "Неизвестное действие. Используйте 'add', 'remove' или 'list'.", cancellationToken: cancellationToken);
         }
     }
-    
-    private async Task HandleMessageCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
+
+    private async Task HandleMessageCommand(long chatId, long userId, string args, Message message, CancellationToken cancellationToken)
+{
+    // Check if message contains photo
+    if (message.Photo?.Length > 0)
     {
-        if (string.IsNullOrWhiteSpace(args))
-        {
-            await _botClient.SendTextMessageAsync(chatId, 
-                "Использование:\n" +
-                "/message sender <текст> - Отправить сообщение тому, кто вам дарит\n" +
-                "/message recipient <текст> - Отправить сообщение тому, кому вы дарите", 
-                cancellationToken: cancellationToken);
-            return;
-        }
-        
-        var parts = args.Split(' ', 2);
-        if (parts.Length < 2)
+        var file = message.Photo.First();
+        var fileId = file.FileId;
+        var caption = message.Caption ?? "";
+
+        var prts = caption.Split(' ', 3);
+        if (prts.Length < 3)
         {
             await _botClient.SendTextMessageAsync(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
             return;
         }
-        
-        var targetType = parts[0];
-        var messageText = parts[1];
-        
-        var (success, errorMessage, targetUser, isFromGifter) = await _messageService.ValidateAndGetTargetAsync(userId, targetType);
-        
+
+        var targType = prts[1];
+        var msgText = prts[2];
+
+        var (success, errorMessage, targetUser, isFromGifter) = await _messageService.ValidateAndGetTargetAsync(userId, targType);
+
         if (!success)
         {
             await _botClient.SendTextMessageAsync(chatId, errorMessage, cancellationToken: cancellationToken);
             return;
         }
-        
+
         if (targetUser == null)
         {
             await _botClient.SendTextMessageAsync(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
             return;
         }
-        
-        // Save message
-        await _messageService.SaveMessageAsync(userId, targetUser.TelegramUserId, messageText, isFromGifter);
-        
-        // Send to recipient
-        var label = isFromGifter 
-            ? "💬 Сообщение от того, кто вам дарит (sender):"
-            : "💬 Сообщение от того, кому вы дарите (recipient):";
-        
-        await _botClient.SendTextMessageAsync(targetUser.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
-        await _botClient.SendTextMessageAsync(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
+
+        // Save media message info to database (you would need to extend your message model)
+        await _messageService.SaveMessageAsync(userId, targetUser.TelegramUserId, $"{fileId} - {msgText}", isFromGifter);
+
+        // Forward media to recipient
+        await _botClient.SendPhotoAsync(targetUser.TelegramUserId, new InputFileId(fileId),
+            caption: $"💬 Сообщение от {(isFromGifter ? "того, кто вам дарит (sender)" : "того, кому вы дарите (recipient)")}:\n\n{msgText}",
+            cancellationToken: cancellationToken);
+
+        await _botClient.SendTextMessageAsync(chatId, "✅ Изображение отправлено!", cancellationToken: cancellationToken);
+        return;
     }
+
+    // Existing text message handling
+    if (string.IsNullOrWhiteSpace(args))
+    {
+        await _botClient.SendTextMessageAsync(chatId,
+            "Использование:\n" +
+            "/message sender <текст> - Отправить сообщение тому, кто вам дарит\n" +
+            "/message recipient <текст> - Отправить сообщение тому, кому вы дарите",
+            cancellationToken: cancellationToken);
+        return;
+    }
+
+    var parts = args.Split(' ', 2);
+    if (parts.Length < 2)
+    {
+        await _botClient.SendTextMessageAsync(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
+        return;
+    }
+
+    var targetType = parts[0];
+    var messageText = parts[1];
+
+    var (success2, errorMessage2, targetUser2, isFromGifter2) = await _messageService.ValidateAndGetTargetAsync(userId, targetType);
+
+    if (!success2)
+    {
+        await _botClient.SendTextMessageAsync(chatId, errorMessage2, cancellationToken: cancellationToken);
+        return;
+    }
+
+    if (targetUser2 == null)
+    {
+        await _botClient.SendTextMessageAsync(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
+        return;
+    }
+
+    // Save text message
+    await _messageService.SaveMessageAsync(userId, targetUser2.TelegramUserId, messageText, isFromGifter2);
+
+    // Send to recipient
+    var label = isFromGifter2
+        ? "💬 Сообщение от того, кто вам дарит (sender):"
+        : "💬 Сообщение от того, кому вы дарите (recipient):";
+
+    await _botClient.SendTextMessageAsync(targetUser2.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
+    await _botClient.SendTextMessageAsync(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
+}
     
     private async Task HandleAddUserCommand(long chatId, string args, CancellationToken cancellationToken)
     {
@@ -616,7 +676,39 @@ public class BotService : IHostedService
         $"Пожелания: {(string.IsNullOrEmpty(assignment.Recipient.Wishes) ? "не указаны" : assignment.Recipient.Wishes)}\n" +
         $"Адрес доставки: {(string.IsNullOrEmpty(assignment.Recipient.Addresses) ? "не указан" : assignment.Recipient.Addresses)}\n" +
         $"Телефон: {(string.IsNullOrEmpty(assignment.Recipient.PhoneNumber) ? "не указан" : assignment.Recipient.PhoneNumber)}";
-    
+
+    private async Task HandleMessageAllCommand(long chatId, string args, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(args))
+        {
+            await _botClient.SendTextMessageAsync(chatId, "Укажите текст сообщения.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        var msg = $"Сообщение от админа:\n\n{args}";
+
+        var sendToIds = await _messageService.GetAllParticipantIds();
+        var sentCount = 0;
+        var failedCount = 0;
+        foreach (var id in sendToIds)
+        {
+            try
+            {
+                await _botClient.SendTextMessageAsync(id, msg, cancellationToken: cancellationToken);
+                ++sentCount;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Ошибка при отправке сообщения пользователю {id}: {e.Message}");
+                ++failedCount;
+            }
+        }
+
+        await _botClient.SendTextMessageAsync(chatId,
+            $"Сообщение отправлено:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}",
+            cancellationToken: cancellationToken);
+    }
+
     private async Task HandleParticipantsCommand(long chatId, CancellationToken cancellationToken)
     {
         var users = await _context.Users.OrderBy(u => u.RegisteredAt).ToListAsync(cancellationToken);

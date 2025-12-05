@@ -75,5 +75,7 @@ public class MessageService
         _context.AnonymousMessages.Add(anonymousMessage);
         await _context.SaveChangesAsync();
     }
+
+    public async Task<long[]> GetAllParticipantIds() => await _context.Users.Select(x => x.TelegramUserId).ToArrayAsync();
 }
 
