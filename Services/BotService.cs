@@ -43,7 +43,7 @@ public class BotService : IHostedService
             AllowedUpdates = Array.Empty<UpdateType>()
         };
 
-        await _botClient.SetMyCommandsAsync(
+        await _botClient.SetMyCommands(
             [
                 new BotCommand { Command = "help", Description = "Показать список доступных команд" },
                 new BotCommand { Command = "register", Description = "Зарегистрироваться" },
@@ -59,12 +59,12 @@ public class BotService : IHostedService
 
         _botClient.StartReceiving(
             updateHandler: HandleUpdateAsync,
-            pollingErrorHandler: HandlePollingErrorAsync,
+            errorHandler: HandlePollingErrorAsync,
             receiverOptions: receiverOptions,
             cancellationToken: _cancellationTokenSource.Token
         );
         
-        var me = await _botClient.GetMeAsync(cancellationToken);
+        var me = await _botClient.GetMe(cancellationToken);
         Console.WriteLine($"Бот @{me.Username} запущен и готов к работе!");
     }
     
@@ -140,47 +140,47 @@ public class BotService : IHostedService
                         if (IsAdmin(userId))
                             await HandleAddUserCommand(chatId, args, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     case "/shuffle":
                         if (IsAdmin(userId))
                             await HandleShuffleCommand(chatId, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     case "/sendinfo":
                         if (IsAdmin(userId))
                             await HandleSendInfoCommand(chatId, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     case "/messageall":
                         if (IsAdmin(userId))
                             await HandleMessageAllCommand(chatId, args, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     case "/participants":
                         if (IsAdmin(userId))
                             await HandleParticipantsCommand(chatId, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     case "/stats":
                         if (IsAdmin(userId))
                             await HandleStatsCommand(chatId, cancellationToken);
                         else
-                            await botClient.SendTextMessageAsync(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
                         break;
                     default:
-                        await botClient.SendTextMessageAsync(chatId, "Неизвестная команда. Используйте /start для просмотра доступных команд.", cancellationToken: cancellationToken);
+                        await botClient.SendMessage(chatId, "Неизвестная команда. Используйте /start для просмотра доступных команд.", cancellationToken: cancellationToken);
                         break;
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Ошибка при обработке команды: {ex.Message}");
-                await botClient.SendTextMessageAsync(chatId, "Произошла ошибка при обработке команды. Попробуйте позже.", cancellationToken: cancellationToken);
+                await botClient.SendMessage(chatId, "Произошла ошибка при обработке команды. Попробуйте позже.", cancellationToken: cancellationToken);
             }
         }
     }
@@ -212,21 +212,21 @@ public class BotService : IHostedService
                        "/stats - Статистика";
         }
 
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
     
     private async Task HandleRegisterCommand(long chatId, long userId, string? username, string? firstName, string? lastName, CancellationToken cancellationToken)
     {
         if (await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Регистрация закрыта. Жеребьёвка уже была проведена.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Регистрация закрыта. Жеребьёвка уже была проведена.", cancellationToken: cancellationToken);
             return;
         }
         
         var existingUser = await _context.Users.FindAsync(userId);
         if (existingUser != null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы уже зарегистрированы! Используйте /myinfo для просмотра информации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы уже зарегистрированы! Используйте /myinfo для просмотра информации.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -242,7 +242,7 @@ public class BotService : IHostedService
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
         
-        await _botClient.SendTextMessageAsync(chatId, 
+        await _botClient.SendMessage(chatId, 
             "✅ Вы успешно зарегистрированы!\n\n" +
             "Теперь вы можете:\n" +
             "- Добавить пожелания: /updatewishes <текст>\n" +
@@ -257,7 +257,7 @@ public class BotService : IHostedService
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -285,21 +285,21 @@ public class BotService : IHostedService
             message += "Чёрный список пуст.";
         }
         
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
 
     private async Task HandleRecipientInfoCommand(long chatId, long userId, CancellationToken cancellationToken)
     {
         if (!await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Информация о получателе недоступна до жеребьёвки.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Информация о получателе недоступна до жеребьёвки.", cancellationToken: cancellationToken);
             return;
         }
 
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -307,113 +307,113 @@ public class BotService : IHostedService
 
         if (assignment is null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Не найдена информация о вашем назначении.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Не найдена информация о вашем назначении.", cancellationToken: cancellationToken);
             return;
         }
 
         var message = GetRecipientInfoString(assignment);
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
     
     private async Task HandleUpdateWishesCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
         if (await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
             return;
         }
         
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Использование: /updatewishes <текст пожеланий>", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Использование: /updatewishes <текст пожеланий>", cancellationToken: cancellationToken);
             return;
         }
         
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
         
         user.Wishes = args;
         await _context.SaveChangesAsync(cancellationToken);
         
-        await _botClient.SendTextMessageAsync(chatId, "✅ Пожелания обновлены!", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "✅ Пожелания обновлены!", cancellationToken: cancellationToken);
     }
     
     private async Task HandleUpdateDestinationCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
         if (await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
             return;
         }
         
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Использование: /update_destination <текст>", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Использование: /update_destination <текст>", cancellationToken: cancellationToken);
             return;
         }
         
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
         
         user.Addresses = args;
         await _context.SaveChangesAsync(cancellationToken);
         
-        await _botClient.SendTextMessageAsync(chatId, "✅ Адрес доставки обновлён!", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "✅ Адрес доставки обновлён!", cancellationToken: cancellationToken);
     }
     
     private async Task HandleUpdatePhoneCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
         if (await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
             return;
         }
         
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Использование: /updatephone <номер телефона>", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Использование: /updatephone <номер телефона>", cancellationToken: cancellationToken);
             return;
         }
         
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
         
         user.PhoneNumber = args;
         await _context.SaveChangesAsync(cancellationToken);
         
-        await _botClient.SendTextMessageAsync(chatId, "✅ Номер телефона обновлён!", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "✅ Номер телефона обновлён!", cancellationToken: cancellationToken);
     }
     
     private async Task HandleBlacklistCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
         if (await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Изменение чёрного списка недоступно после жеребьёвки.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Изменение чёрного списка недоступно после жеребьёвки.", cancellationToken: cancellationToken);
             return;
         }
         
         var user = await _context.Users.FindAsync(userId);
         if (user == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не зарегистрированы. Используйте /register для регистрации.", cancellationToken: cancellationToken);
             return;
         }
         
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, 
+            await _botClient.SendMessage(chatId, 
                 "Использование:\n" +
                 "/blacklist add @username - Добавить в чёрный список\n" +
                 "/blacklist remove @username - Удалить из чёрного списка\n" +
@@ -434,7 +434,7 @@ public class BotService : IHostedService
             
             if (!blacklist.Any())
             {
-                await _botClient.SendTextMessageAsync(chatId, "Ваш чёрный список пуст.", cancellationToken: cancellationToken);
+                await _botClient.SendMessage(chatId, "Ваш чёрный список пуст.", cancellationToken: cancellationToken);
                 return;
             }
             
@@ -444,13 +444,13 @@ public class BotService : IHostedService
                 message += $"- {GetUserDisplayName(item.BlacklistedUser)}\n";
             }
             
-            await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
             return;
         }
         
         if (parts.Length < 2)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Укажите имя пользователя.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Укажите имя пользователя.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -459,13 +459,13 @@ public class BotService : IHostedService
         
         if (targetUser == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Пользователь не найден или не зарегистрирован.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Пользователь не найден или не зарегистрирован.", cancellationToken: cancellationToken);
             return;
         }
         
         if (targetUser.TelegramUserId == userId)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Вы не можете добавить себя в чёрный список.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Вы не можете добавить себя в чёрный список.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -476,7 +476,7 @@ public class BotService : IHostedService
             
             if (existing != null)
             {
-                await _botClient.SendTextMessageAsync(chatId, "Пользователь уже в чёрном списке.", cancellationToken: cancellationToken);
+                await _botClient.SendMessage(chatId, "Пользователь уже в чёрном списке.", cancellationToken: cancellationToken);
                 return;
             }
             
@@ -487,7 +487,7 @@ public class BotService : IHostedService
             });
             
             await _context.SaveChangesAsync(cancellationToken);
-            await _botClient.SendTextMessageAsync(chatId, $"✅ {GetUserDisplayName(targetUser)} добавлен в чёрный список.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, $"✅ {GetUserDisplayName(targetUser)} добавлен в чёрный список.", cancellationToken: cancellationToken);
         }
         else if (action == "remove")
         {
@@ -496,17 +496,17 @@ public class BotService : IHostedService
             
             if (existing == null)
             {
-                await _botClient.SendTextMessageAsync(chatId, "Пользователь не найден в чёрном списке.", cancellationToken: cancellationToken);
+                await _botClient.SendMessage(chatId, "Пользователь не найден в чёрном списке.", cancellationToken: cancellationToken);
                 return;
             }
             
             _context.Blacklist.Remove(existing);
             await _context.SaveChangesAsync(cancellationToken);
-            await _botClient.SendTextMessageAsync(chatId, $"✅ {GetUserDisplayName(targetUser)} удалён из чёрного списка.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, $"✅ {GetUserDisplayName(targetUser)} удалён из чёрного списка.", cancellationToken: cancellationToken);
         }
         else
         {
-            await _botClient.SendTextMessageAsync(chatId, "Неизвестное действие. Используйте 'add', 'remove' или 'list'.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Неизвестное действие. Используйте 'add', 'remove' или 'list'.", cancellationToken: cancellationToken);
         }
     }
 
@@ -522,7 +522,7 @@ public class BotService : IHostedService
         var prts = caption.Split(' ', 3);
         if (prts.Length < 3)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -533,13 +533,13 @@ public class BotService : IHostedService
 
         if (!success)
         {
-            await _botClient.SendTextMessageAsync(chatId, errorMessage, cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, errorMessage, cancellationToken: cancellationToken);
             return;
         }
 
         if (targetUser == null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -547,18 +547,18 @@ public class BotService : IHostedService
         await _messageService.SaveMessageAsync(userId, targetUser.TelegramUserId, $"{fileId} - {msgText}", isFromGifter);
 
         // Forward media to recipient
-        await _botClient.SendPhotoAsync(targetUser.TelegramUserId, new InputFileId(fileId),
+        await _botClient.SendPhoto(targetUser.TelegramUserId, new InputFileId(fileId),
             caption: $"💬 Сообщение от {(isFromGifter ? "того, кто вам дарит (sender)" : "того, кому вы дарите (recipient)")}:\n\n{msgText}",
             cancellationToken: cancellationToken);
 
-        await _botClient.SendTextMessageAsync(chatId, "✅ Изображение отправлено!", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "✅ Изображение отправлено!", cancellationToken: cancellationToken);
         return;
     }
 
     // Existing text message handling
     if (string.IsNullOrWhiteSpace(args))
     {
-        await _botClient.SendTextMessageAsync(chatId,
+        await _botClient.SendMessage(chatId,
             "Использование:\n" +
             "/message sender <текст> - Отправить сообщение тому, кто вам дарит\n" +
             "/message recipient <текст> - Отправить сообщение тому, кому вы дарите",
@@ -569,7 +569,7 @@ public class BotService : IHostedService
     var parts = args.Split(' ', 2);
     if (parts.Length < 2)
     {
-        await _botClient.SendTextMessageAsync(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "Укажите получателя (sender/recipient) и текст сообщения.", cancellationToken: cancellationToken);
         return;
     }
 
@@ -580,13 +580,13 @@ public class BotService : IHostedService
 
     if (!success2)
     {
-        await _botClient.SendTextMessageAsync(chatId, errorMessage2, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, errorMessage2, cancellationToken: cancellationToken);
         return;
     }
 
     if (targetUser2 == null)
     {
-        await _botClient.SendTextMessageAsync(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, "Получатель не найден.", cancellationToken: cancellationToken);
         return;
     }
 
@@ -598,15 +598,15 @@ public class BotService : IHostedService
         ? "💬 Сообщение от того, кто вам дарит (sender):"
         : "💬 Сообщение от того, кому вы дарите (recipient):";
 
-    await _botClient.SendTextMessageAsync(targetUser2.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
-    await _botClient.SendTextMessageAsync(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
+    await _botClient.SendMessage(targetUser2.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
+    await _botClient.SendMessage(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
 }
     
     private async Task HandleAddUserCommand(long chatId, string args, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Использование: /adduser @username", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Использование: /adduser @username", cancellationToken: cancellationToken);
             return;
         }
         
@@ -615,13 +615,13 @@ public class BotService : IHostedService
         
         if (user != null)
         {
-            await _botClient.SendTextMessageAsync(chatId, "Пользователь уже зарегистрирован.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Пользователь уже зарегистрирован.", cancellationToken: cancellationToken);
             return;
         }
         
         // Note: This command requires the user to have started the bot first
         // In a real scenario, you might want to get user info differently
-        await _botClient.SendTextMessageAsync(chatId, 
+        await _botClient.SendMessage(chatId, 
             $"Пользователь @{username} должен сначала написать боту /start, чтобы его можно было добавить. " +
             "Или используйте /register для регистрации через бота.", 
             cancellationToken: cancellationToken);
@@ -631,14 +631,14 @@ public class BotService : IHostedService
     {
         var (_, message) = await _shuffleService.PerformShuffleAsync();
         
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
     
     private async Task HandleSendInfoCommand(long chatId, CancellationToken cancellationToken)
     {
         if (!await _shuffleService.HasShuffleHappenedAsync())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Жеребьёвка ещё не была проведена.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Жеребьёвка ещё не была проведена.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -655,7 +655,7 @@ public class BotService : IHostedService
             {
                 var message = GetRecipientInfoString(assignment);
                 
-                await _botClient.SendTextMessageAsync(assignment.GifterId, message, cancellationToken: cancellationToken);
+                await _botClient.SendMessage(assignment.GifterId, message, cancellationToken: cancellationToken);
                 sentCount++;
             }
             catch (Exception ex)
@@ -665,7 +665,7 @@ public class BotService : IHostedService
             }
         }
         
-        await _botClient.SendTextMessageAsync(chatId, 
+        await _botClient.SendMessage(chatId, 
             $"Информация отправлена:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}", 
             cancellationToken: cancellationToken);
     }
@@ -681,7 +681,7 @@ public class BotService : IHostedService
     {
         if (string.IsNullOrWhiteSpace(args))
         {
-            await _botClient.SendTextMessageAsync(chatId, "Укажите текст сообщения.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Укажите текст сообщения.", cancellationToken: cancellationToken);
             return;
         }
 
@@ -694,7 +694,7 @@ public class BotService : IHostedService
         {
             try
             {
-                await _botClient.SendTextMessageAsync(id, msg, cancellationToken: cancellationToken);
+                await _botClient.SendMessage(id, msg, cancellationToken: cancellationToken);
                 ++sentCount;
             }
             catch (Exception e)
@@ -704,7 +704,7 @@ public class BotService : IHostedService
             }
         }
 
-        await _botClient.SendTextMessageAsync(chatId,
+        await _botClient.SendMessage(chatId,
             $"Сообщение отправлено:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}",
             cancellationToken: cancellationToken);
     }
@@ -715,7 +715,7 @@ public class BotService : IHostedService
         
         if (!users.Any())
         {
-            await _botClient.SendTextMessageAsync(chatId, "Нет зарегистрированных участников.", cancellationToken: cancellationToken);
+            await _botClient.SendMessage(chatId, "Нет зарегистрированных участников.", cancellationToken: cancellationToken);
             return;
         }
         
@@ -725,7 +725,7 @@ public class BotService : IHostedService
             message += $"{GetUserDisplayName(user)}\n";
         }
         
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
     
     private async Task HandleStatsCommand(long chatId, CancellationToken cancellationToken)
@@ -739,7 +739,7 @@ public class BotService : IHostedService
                      $"Жеребьёвка: {(hasShuffled ? "проведена" : "не проведена")}\n" +
                      $"Назначений: {shuffledCount}";
         
-        await _botClient.SendTextMessageAsync(chatId, message, cancellationToken: cancellationToken);
+        await _botClient.SendMessage(chatId, message, cancellationToken: cancellationToken);
     }
     
     private bool IsAdmin(long userId)
