@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SecretSantaBot.Data;
 using SecretSantaBot.Models;
 using Telegram.Bot;
@@ -18,24 +20,26 @@ public class BotService : IHostedService
     private readonly ShuffleService _shuffleService;
     private readonly MessageService _messageService;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<BotService> _logger;
     private CancellationTokenSource? _cancellationTokenSource;
     
-    public BotService(
-        ITelegramBotClient botClient,
+    public BotService(ITelegramBotClient botClient,
         DatabaseContext context,
         ShuffleService shuffleService,
         MessageService messageService,
-        IConfiguration configuration)
+        IConfiguration configuration, ILogger<BotService> logger)
     {
         _botClient = botClient;
         _context = context;
         _shuffleService = shuffleService;
         _messageService = messageService;
         _configuration = configuration;
+        _logger = logger;
     }
     
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Starting Telegram polling");
         _cancellationTokenSource = new CancellationTokenSource();
         
         var receiverOptions = new ReceiverOptions
@@ -65,12 +69,13 @@ public class BotService : IHostedService
         );
         
         var me = await _botClient.GetMe(cancellationToken);
-        Console.WriteLine($"Бот @{me.Username} запущен и готов к работе!");
+        _logger.LogInformation("Telegram bot {BotUsername} ({BotId}) is ready", me.Username, me.Id);
     }
     
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _cancellationTokenSource?.Cancel();
+        _logger.LogInformation("Telegram polling cancellation requested");
         return Task.CompletedTask;
     }
     
@@ -103,9 +108,27 @@ public class BotService : IHostedService
             var commandParts = messageText.Split(' ', 2);
             var command = commandParts[0].ToLower();
             var args = commandParts.Length > 1 ? commandParts[1] : "";
+
+            using var scope = _logger.BeginScope(new Dictionary<string, object>
+            {
+                ["UpdateId"] = update.Id,
+                ["ChatId"] = chatId,
+                ["UserId"] = userId,
+                ["Command"] = command
+            });
+            var startedAt = Stopwatch.GetTimestamp();
             
             try
             {
+                _logger.LogDebug("Handling command");
+                if (command is "/adduser" or "/shuffle" or "/sendinfo" or "/messageall" or "/participants" or "/stats"
+                    && !IsAdmin(userId))
+                {
+                    _logger.LogWarning("Admin command denied");
+                    await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                    return;
+                }
+
                 switch (command)
                 {
                     case "/start" or "/help":
@@ -137,49 +160,38 @@ public class BotService : IHostedService
                         break;
                     // Admin commands
                     case "/adduser":
-                        if (IsAdmin(userId))
-                            await HandleAddUserCommand(chatId, args, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleAddUserCommand(chatId, args, cancellationToken);
                         break;
                     case "/shuffle":
-                        if (IsAdmin(userId))
-                            await HandleShuffleCommand(chatId, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleShuffleCommand(chatId, cancellationToken);
                         break;
                     case "/sendinfo":
-                        if (IsAdmin(userId))
-                            await HandleSendInfoCommand(chatId, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleSendInfoCommand(chatId, cancellationToken);
                         break;
                     case "/messageall":
-                        if (IsAdmin(userId))
-                            await HandleMessageAllCommand(chatId, args, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleMessageAllCommand(chatId, args, cancellationToken);
                         break;
                     case "/participants":
-                        if (IsAdmin(userId))
-                            await HandleParticipantsCommand(chatId, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleParticipantsCommand(chatId, cancellationToken);
                         break;
                     case "/stats":
-                        if (IsAdmin(userId))
-                            await HandleStatsCommand(chatId, cancellationToken);
-                        else
-                            await botClient.SendMessage(chatId, "У вас нет прав администратора.", cancellationToken: cancellationToken);
+                        await HandleStatsCommand(chatId, cancellationToken);
                         break;
                     default:
+                        _logger.LogWarning("Unknown command received");
                         await botClient.SendMessage(chatId, "Неизвестная команда. Используйте /start для просмотра доступных команд.", cancellationToken: cancellationToken);
                         break;
                 }
+
+                _logger.LogInformation("Command handled in {ElapsedMilliseconds} ms", Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogDebug("Command cancelled during shutdown");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка при обработке команды: {ex.Message}");
+                _logger.LogError(ex, "Command handling failed after {ElapsedMilliseconds} ms", Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds);
                 await botClient.SendMessage(chatId, "Произошла ошибка при обработке команды. Попробуйте позже.", cancellationToken: cancellationToken);
             }
         }
@@ -241,6 +253,7 @@ public class BotService : IHostedService
         
         _context.Users.Add(user);
         await _context.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Participant registered");
         
         await _botClient.SendMessage(chatId, 
             "✅ Вы успешно зарегистрированы!\n\n" +
@@ -339,6 +352,7 @@ public class BotService : IHostedService
         user.Wishes = args;
         await _context.SaveChangesAsync(cancellationToken);
         
+        _logger.LogInformation("Profile field {ProfileField} updated", "Wishes");
         await _botClient.SendMessage(chatId, "✅ Пожелания обновлены!", cancellationToken: cancellationToken);
     }
     
@@ -366,6 +380,7 @@ public class BotService : IHostedService
         user.Addresses = args;
         await _context.SaveChangesAsync(cancellationToken);
         
+        _logger.LogInformation("Profile field {ProfileField} updated", "Addresses");
         await _botClient.SendMessage(chatId, "✅ Адрес доставки обновлён!", cancellationToken: cancellationToken);
     }
     
@@ -393,6 +408,7 @@ public class BotService : IHostedService
         user.PhoneNumber = args;
         await _context.SaveChangesAsync(cancellationToken);
         
+        _logger.LogInformation("Profile field {ProfileField} updated", "PhoneNumber");
         await _botClient.SendMessage(chatId, "✅ Номер телефона обновлён!", cancellationToken: cancellationToken);
     }
     
@@ -487,6 +503,7 @@ public class BotService : IHostedService
             });
             
             await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Blacklist entry added");
             await _botClient.SendMessage(chatId, $"✅ {GetUserDisplayName(targetUser)} добавлен в чёрный список.", cancellationToken: cancellationToken);
         }
         else if (action == "remove")
@@ -502,6 +519,7 @@ public class BotService : IHostedService
             
             _context.Blacklist.Remove(existing);
             await _context.SaveChangesAsync(cancellationToken);
+            _logger.LogInformation("Blacklist entry removed");
             await _botClient.SendMessage(chatId, $"✅ {GetUserDisplayName(targetUser)} удалён из чёрного списка.", cancellationToken: cancellationToken);
         }
         else
@@ -551,6 +569,7 @@ public class BotService : IHostedService
             caption: $"💬 Сообщение от {(isFromGifter ? "того, кто вам дарит (sender)" : "того, кому вы дарите (recipient)")}:\n\n{msgText}",
             cancellationToken: cancellationToken);
 
+        _logger.LogInformation("Anonymous {MessageKind} message delivered", "Photo");
         await _botClient.SendMessage(chatId, "✅ Изображение отправлено!", cancellationToken: cancellationToken);
         return;
     }
@@ -599,6 +618,7 @@ public class BotService : IHostedService
         : "💬 Сообщение от того, кому вы дарите (recipient):";
 
     await _botClient.SendMessage(targetUser2.TelegramUserId, $"{label}\n\n{messageText}", cancellationToken: cancellationToken);
+    _logger.LogInformation("Anonymous {MessageKind} message delivered", "Text");
     await _botClient.SendMessage(chatId, "✅ Сообщение отправлено!", cancellationToken: cancellationToken);
 }
     
@@ -648,6 +668,8 @@ public class BotService : IHostedService
         
         int sentCount = 0;
         int failedCount = 0;
+
+        _logger.LogInformation("Sending recipient information to {ParticipantCount} participants", assignments.Count);
         
         foreach (var assignment in assignments)
         {
@@ -658,13 +680,18 @@ public class BotService : IHostedService
                 await _botClient.SendMessage(assignment.GifterId, message, cancellationToken: cancellationToken);
                 sentCount++;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка при отправке сообщения пользователю {assignment.GifterId}: {ex.Message}");
+                _logger.LogError(ex, "Recipient information delivery failed for user {DeliveryUserId}", assignment.GifterId);
                 failedCount++;
             }
         }
         
+        _logger.LogInformation("Recipient information delivery finished; sent: {SentCount}, failed: {FailedCount}", sentCount, failedCount);
         await _botClient.SendMessage(chatId, 
             $"Информация отправлена:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}", 
             cancellationToken: cancellationToken);
@@ -688,6 +715,7 @@ public class BotService : IHostedService
         var msg = $"Сообщение от админа:\n\n{args}";
 
         var sendToIds = await _messageService.GetAllParticipantIds();
+        _logger.LogInformation("Broadcast started for {ParticipantCount} participants", sendToIds.Length);
         var sentCount = 0;
         var failedCount = 0;
         foreach (var id in sendToIds)
@@ -697,13 +725,18 @@ public class BotService : IHostedService
                 await _botClient.SendMessage(id, msg, cancellationToken: cancellationToken);
                 ++sentCount;
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception e)
             {
-                Console.WriteLine($"Ошибка при отправке сообщения пользователю {id}: {e.Message}");
+                _logger.LogError(e, "Broadcast delivery failed for user {DeliveryUserId}", id);
                 ++failedCount;
             }
         }
 
+        _logger.LogInformation("Broadcast finished; sent: {SentCount}, failed: {FailedCount}", sentCount, failedCount);
         await _botClient.SendMessage(chatId,
             $"Сообщение отправлено:\n✅ Успешно: {sentCount}\n❌ Ошибок: {failedCount}",
             cancellationToken: cancellationToken);
@@ -762,7 +795,10 @@ public class BotService : IHostedService
     
     private Task HandlePollingErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
-        Console.WriteLine($"Ошибка при опросе Telegram API: {exception.Message}");
+        if (exception is OperationCanceledException && cancellationToken.IsCancellationRequested)
+            _logger.LogDebug("Telegram polling cancelled during shutdown");
+        else
+            _logger.LogError(exception, "Telegram polling failed");
         return Task.CompletedTask;
     }
 }

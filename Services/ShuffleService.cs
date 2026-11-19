@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SecretSantaBot.Data;
 using SecretSantaBot.Models;
 
@@ -7,10 +8,12 @@ namespace SecretSantaBot.Services;
 public class ShuffleService
 {
     private readonly DatabaseContext _context;
+    private readonly ILogger<ShuffleService> _logger;
     
-    public ShuffleService(DatabaseContext context)
+    public ShuffleService(DatabaseContext context, ILogger<ShuffleService> logger)
     {
         _context = context;
+        _logger = logger;
     }
     
     public async Task<bool> HasShuffleHappenedAsync()
@@ -21,15 +24,18 @@ public class ShuffleService
     public async Task<(bool Success, string Message)> PerformShuffleAsync()
     {
         var users = await _context.Users.ToListAsync();
+        _logger.LogInformation("Shuffle started with {ParticipantCount} participants", users.Count);
         
         if (users.Count < 2)
         {
+            _logger.LogWarning("Shuffle rejected: at least two participants are required");
             return (false, "Недостаточно участников для жеребьёвки. Нужно минимум 2 человека.");
         }
         
         // Check if shuffle already happened
         if (await HasShuffleHappenedAsync())
         {
+            _logger.LogWarning("Replacing existing shuffle assignments");
             _context.RemoveRange(await _context.Shuffle.ToArrayAsync());
             await _context.SaveChangesAsync();
             // return (false, "Жеребьёвка уже была проведена.");
@@ -52,6 +58,7 @@ public class ShuffleService
             
             if (possibleRecipients.Count == 0)
             {
+                _logger.LogWarning("Shuffle rejected: a participant has no eligible recipient");
                 return (false, $"Пользователь {GetUserDisplayName(user)} не может получить получателя из-за чёрного списка.");
             }
         }
@@ -71,6 +78,7 @@ public class ShuffleService
             
             if (possibleRecipients.Count == 0)
             {
+                _logger.LogWarning("Shuffle failed: no eligible recipient remains during assignment");
                 // This shouldn't happen due to validation, but handle it
                 return (false, "Ошибка при жеребьёвке. Попробуйте ещё раз.");
             }
@@ -90,6 +98,7 @@ public class ShuffleService
         
         _context.Shuffle.AddRange(shuffleEntries);
         await _context.SaveChangesAsync();
+        _logger.LogInformation("Shuffle completed with {AssignmentCount} assignments", shuffleEntries.Count);
         
         return (true, "Жеребьёвка успешно проведена!");
     }

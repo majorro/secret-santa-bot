@@ -1,0 +1,6 @@
+services:
+  secret-santa-bot:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile

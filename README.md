@@ -1,6 +1,6 @@
 # Secret Santa Telegram Bot
 
-Бот для организации Тайного Санты в Telegram на .NET 9.
+Бот для организации Тайного Санты в Telegram на .NET 10.
 
 ## Возможности
 
@@ -13,32 +13,8 @@
 
 ## Требования
 
-- .NET 9 SDK
+- .NET 10 SDK для локального запуска или Docker с Docker Compose 2.20+ для контейнера
 - Telegram Bot Token (получить у [@BotFather](https://t.me/BotFather))
-
-## Установка
-
-1. Клонируйте репозиторий или скачайте проект
-
-2. Откройте `appsettings.json` и укажите:
-   ```json
-   {
-     "BotToken": "ВАШ_ТОКЕН_БОТА",
-     "AdminUserIds": [123456789, 987654321]
-   }
-   ```
-   - `BotToken`: токен вашего бота от BotFather
-   - `AdminUserIds`: массив Telegram User ID администраторов (можно узнать через бота [@userinfobot](https://t.me/userinfobot))
-
-3. Восстановите зависимости:
-   ```bash
-   dotnet restore
-   ```
-
-4. Запустите бота:
-   ```bash
-   dotnet run
-   ```
 
 ## Команды для пользователей
 
@@ -80,7 +56,7 @@
 
 ## База данных
 
-Бот использует SQLite базу данных (`secret_santa.db`), которая создаётся автоматически при первом запуске.
+Бот использует SQLite базу данных (`secret_santa.db`), которая создаётся автоматически при первом запуске. Строку подключения можно переопределить через `ConnectionStrings__DefaultConnection` в `.env` или окружении; Docker Compose задаёт путь внутри каталога, подключённого через bind mount.
 
 ## Примечания
 

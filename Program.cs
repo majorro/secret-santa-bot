@@ -1,24 +1,27 @@
+using Majorro.Common.Setup;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SecretSantaBot.Data;
 using SecretSantaBot.Services;
 using Telegram.Bot;
 
+DotEnv.TryLoad(".env");
+
 var builder = Host.CreateApplicationBuilder(args);
 
-// Configuration
-builder.Configuration
-    .SetBasePath(Directory.GetCurrentDirectory())
-    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddEnvironmentVariables();
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
 var botToken = builder.Configuration["BotToken"];
 if (string.IsNullOrEmpty(botToken))
 {
-    Console.WriteLine("ОШИБКА: BotToken не указан в appsettings.json!");
-    Console.WriteLine("Пожалуйста, добавьте ваш токен бота в файл appsettings.json");
+    using var loggerFactory = LoggerFactory.Create(logging => logging.AddJsonConsole());
+    loggerFactory.CreateLogger("SecretSantaBot.Startup")
+        .LogCritical("BotToken is missing; set it in .env or environment variables");
+    Environment.ExitCode = 1;
     return;
 }
 
@@ -31,15 +34,16 @@ builder.Services.AddHttpClient("telegram_bot_client")
     });
 
 // Register Database
-builder.Services.AddDbContext<DatabaseContext>(options =>
-    options.UseSqlite("Data Source=secret_santa.db"));
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+builder.Services.AddDbContext<DatabaseContext>(options => options.UseSqlite(connectionString));
 
 // Register Services
 builder.Services.AddScoped<ShuffleService>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddHostedService<BotService>();
 
-var host = builder.Build();
+using var host = builder.Build();
+var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SecretSantaBot.Startup");
 
 // Initialize Database
 using (var scope = host.Services.CreateScope())
@@ -47,16 +51,18 @@ using (var scope = host.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<DatabaseContext>();
     try
     {
-        context.Database.EnsureCreated();
-        Console.WriteLine("База данных инициализирована.");
+        var databaseCreated = context.Database.EnsureCreated();
+        logger.LogInformation("Database initialized; created: {DatabaseCreated}", databaseCreated);
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Ошибка при инициализации базы данных: {ex.Message}");
+        logger.LogCritical(ex, "Database initialization failed");
+        Environment.ExitCode = 1;
         return;
     }
 }
 
-Console.WriteLine("Запуск бота...");
+logger.LogInformation("Starting Secret Santa bot");
 await host.RunAsync();
+logger.LogInformation("Secret Santa bot stopped");
 

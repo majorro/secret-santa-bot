@@ -1,0 +1,9 @@
+services:
+  secret-santa-bot:
+    image: ghcr.io/majorro/secret-santa-bot:latest
+    container_name: secret-santa-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ${SECRET_SANTA_DB_DATA_PATH}:/app/data

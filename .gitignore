@@ -28,3 +28,7 @@ obj/
 appsettings.Development.json
 appsettings.Local.json
 
+## Deployment secrets
+.env
+.env.*
+
