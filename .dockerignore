@@ -1,7 +1,6 @@
 **/.env
 **/.env.*
 **/*.env
-**/*appsettings*.json
 **/*.db
 **/*.db-*
 **/*.sqlite

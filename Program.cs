@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Majorro.Common.Setup;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -13,7 +14,12 @@ DotEnv.TryLoad(".env");
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Logging.ClearProviders();
-builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
+builder.Logging.AddJsonConsole(options =>
+{
+    options.IncludeScopes = true;
+    if (!builder.Environment.IsProduction())
+        options.JsonWriterOptions = new JsonWriterOptions { Indented = true };
+});
 
 var botToken = builder.Configuration["BotToken"];
 if (string.IsNullOrEmpty(botToken))

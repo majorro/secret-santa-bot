@@ -1,4 +1,3 @@
-appsettings.json
 .vscode
 
 ## .NET
@@ -25,7 +24,6 @@ obj/
 .idea/
 
 ## User-specific files
-appsettings.Development.json
 appsettings.Local.json
 
 ## Deployment secrets
