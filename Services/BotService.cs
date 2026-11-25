@@ -204,7 +204,7 @@ public class BotService : IHostedService
                       "/help - Показать это сообщение\n" +
                       "/register - Зарегистрироваться\n" +
                       "/myinfo - Посмотреть свою информацию\n" +
-                      "/recipientinfo - Посмотреть информацию о том, кому вы дарите" +
+                      "/recipientinfo - Посмотреть информацию о том, кому вы дарите\n" +
                       "/updatewishes <текст> - Обновить пожелания\n" +
                       "/update_destination <текст> - Обновить адреса доставки\n" +
                       "/updatephone <номер> - Обновить номер телефона\n" +
