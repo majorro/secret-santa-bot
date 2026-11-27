@@ -330,12 +330,6 @@ public class BotService : IHostedService
     
     private async Task HandleUpdateWishesCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
-        if (await _shuffleService.HasShuffleHappenedAsync())
-        {
-            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
-            return;
-        }
-        
         if (string.IsNullOrWhiteSpace(args))
         {
             await _botClient.SendMessage(chatId, "Использование: /updatewishes <текст пожеланий>", cancellationToken: cancellationToken);
@@ -358,12 +352,6 @@ public class BotService : IHostedService
     
     private async Task HandleUpdateDestinationCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
-        if (await _shuffleService.HasShuffleHappenedAsync())
-        {
-            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
-            return;
-        }
-        
         if (string.IsNullOrWhiteSpace(args))
         {
             await _botClient.SendMessage(chatId, "Использование: /update_destination <текст>", cancellationToken: cancellationToken);
@@ -386,12 +374,6 @@ public class BotService : IHostedService
     
     private async Task HandleUpdatePhoneCommand(long chatId, long userId, string args, CancellationToken cancellationToken)
     {
-        if (await _shuffleService.HasShuffleHappenedAsync())
-        {
-            await _botClient.SendMessage(chatId, "Обновление информации недоступно после жеребьёвки.", cancellationToken: cancellationToken);
-            return;
-        }
-        
         if (string.IsNullOrWhiteSpace(args))
         {
             await _botClient.SendMessage(chatId, "Использование: /updatephone <номер телефона>", cancellationToken: cancellationToken);
